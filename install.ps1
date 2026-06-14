@@ -36,13 +36,21 @@ if (-not $nodeInstalled) {
 
 # 2. Install CliGate
 Write-Host "`n[2/5] Installing CliGate proxy..." -ForegroundColor Yellow
-npm install -g cligate
-if ($?) { Write-Host "[OK] CliGate installed successfully." -ForegroundColor Green }
+if (-not (Get-Command cligate -ErrorAction SilentlyContinue)) {
+    npm install -g cligate
+    if ($?) { Write-Host "[OK] CliGate installed successfully." -ForegroundColor Green }
+} else {
+    Write-Host "[OK] CliGate is already installed." -ForegroundColor Green
+}
 
 # 3. Install Claude Code
 Write-Host "`n[3/5] Installing Claude Code..." -ForegroundColor Yellow
-npm install -g @anthropic-ai/claude-code
-if ($?) { Write-Host "[OK] Claude Code installed successfully." -ForegroundColor Green }
+if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
+    npm install -g @anthropic-ai/claude-code
+    if ($?) { Write-Host "[OK] Claude Code installed successfully." -ForegroundColor Green }
+} else {
+    Write-Host "[OK] Claude Code is already installed." -ForegroundColor Green
+}
 
 # 4. Configure PowerShell Profile permanently
 Write-Host "`n[4/5] Configuring PowerShell Profile for Persistent Routing..." -ForegroundColor Yellow
@@ -77,7 +85,7 @@ Write-Host "`n[5/5] Checking CliGate Server..." -ForegroundColor Yellow
 $portInUse = netstat -ano | Select-String ":8081" | Select-String "LISTENING"
 if (-not $portInUse) {
     Write-Host "Starting CliGate in the background..." -ForegroundColor Magenta
-    Start-Process -NoNewWindow -FilePath "cligate" -ArgumentList "start"
+    Start-Process -NoNewWindow -FilePath "cmd.exe" -ArgumentList "/c cligate start"
     Start-Sleep -Seconds 3
     Write-Host "[OK] CliGate server started." -ForegroundColor Green
 } else {
