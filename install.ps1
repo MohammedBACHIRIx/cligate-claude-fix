@@ -85,7 +85,7 @@ Write-Host "`n[5/5] Checking CliGate Server..." -ForegroundColor Yellow
 $portInUse = netstat -ano | Select-String ":8081" | Select-String "LISTENING"
 if (-not $portInUse) {
     Write-Host "Starting CliGate in the background..." -ForegroundColor Magenta
-    Start-Process -NoNewWindow -FilePath "cmd.exe" -ArgumentList "/c cligate start"
+    Start-Process -WindowStyle Hidden -FilePath "cmd.exe" -ArgumentList "/c cligate start"
     Start-Sleep -Seconds 3
     Write-Host "[OK] CliGate server started." -ForegroundColor Green
 } else {

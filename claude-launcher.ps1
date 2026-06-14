@@ -34,7 +34,7 @@ if ($portInUse) {
     Write-Host "[OK] CliGate is already running on port 8081." -ForegroundColor Green
 } else {
     Write-Host "Starting CliGate in the background..." -ForegroundColor Yellow
-    Start-Process -NoNewWindow -FilePath "cmd.exe" -ArgumentList "/c cligate start"
+    Start-Process -WindowStyle Hidden -FilePath "cmd.exe" -ArgumentList "/c cligate start"
     
     # Wait for the server to start
     Start-Sleep -Seconds 3
