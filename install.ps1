@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Automated Installer for Claude Code + CliGate + Gemini 3.1 Pro setup.
     
@@ -31,18 +31,18 @@ if (-not $nodeInstalled) {
     exit
 } else {
     $nodeVer = node -v
-    Write-Host "✓ Node.js is installed ($nodeVer)" -ForegroundColor Green
+    Write-Host "[OK] Node.js is installed ($nodeVer)" -ForegroundColor Green
 }
 
 # 2. Install CliGate
 Write-Host "`n[2/5] Installing CliGate proxy..." -ForegroundColor Yellow
 npm install -g cligate
-if ($?) { Write-Host "✓ CliGate installed successfully." -ForegroundColor Green }
+if ($?) { Write-Host "[OK] CliGate installed successfully." -ForegroundColor Green }
 
 # 3. Install Claude Code
 Write-Host "`n[3/5] Installing Claude Code..." -ForegroundColor Yellow
 npm install -g @anthropic-ai/claude-code
-if ($?) { Write-Host "✓ Claude Code installed successfully." -ForegroundColor Green }
+if ($?) { Write-Host "[OK] Claude Code installed successfully." -ForegroundColor Green }
 
 # 4. Configure PowerShell Profile permanently
 Write-Host "`n[4/5] Configuring PowerShell Profile for Persistent Routing..." -ForegroundColor Yellow
@@ -63,13 +63,13 @@ $exportLines = @"
 
 if ($profileContent -notmatch "ANTHROPIC_BASE_URL") {
     Add-Content -Path $profilePath -Value $exportLines
-    Write-Host "✓ Added ANTHROPIC_BASE_URL and ANTHROPIC_API_KEY to your `$PROFILE" -ForegroundColor Green
+    Write-Host "[OK] Added ANTHROPIC_BASE_URL and ANTHROPIC_API_KEY to your `$PROFILE" -ForegroundColor Green
     
     # Apply to current session immediately
     $env:ANTHROPIC_BASE_URL = "http://localhost:8081"
     $env:ANTHROPIC_API_KEY = "cligate"
 } else {
-    Write-Host "✓ Routing variables already exist in `$PROFILE" -ForegroundColor Green
+    Write-Host "[OK] Routing variables already exist in `$PROFILE" -ForegroundColor Green
 }
 
 # 5. Start CliGate
@@ -79,9 +79,9 @@ if (-not $portInUse) {
     Write-Host "Starting CliGate in the background..." -ForegroundColor Magenta
     Start-Process -NoNewWindow -FilePath "cligate" -ArgumentList "start"
     Start-Sleep -Seconds 3
-    Write-Host "✓ CliGate server started." -ForegroundColor Green
+    Write-Host "[OK] CliGate server started." -ForegroundColor Green
 } else {
-    Write-Host "✓ CliGate server is already running." -ForegroundColor Green
+    Write-Host "[OK] CliGate server is already running." -ForegroundColor Green
 }
 
 # Final Instructions
