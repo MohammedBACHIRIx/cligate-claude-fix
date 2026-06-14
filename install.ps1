@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Automated Installer for Claude Code + CliGate + Gemini 3.1 Pro setup.
     
@@ -86,7 +86,7 @@ if (-not $portInUse) {
 
 # Final Instructions
 Write-Host "`n======================================================" -ForegroundColor Cyan
-Write-Host "  SETUP COMPLETE! 🎉" -ForegroundColor Green
+Write-Host "  SETUP COMPLETE! [YAY]" -ForegroundColor Green
 Write-Host "======================================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "IMPORTANT NEXT STEPS:" -ForegroundColor Yellow
