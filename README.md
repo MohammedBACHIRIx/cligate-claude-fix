@@ -2,10 +2,10 @@
 
 This repository contains scripts and documentation to stabilize and run **Claude Code** powered by **Gemini 3.1 Pro** via the **CliGate** local proxy on Windows.
 
-## 🏎️ The Race Condition Problem
-When automating this setup, a common **race condition** occurs: if you start the `cligate` proxy and immediately launch `claude`, Claude Code will fail to connect because the proxy needs a few seconds to fully bind to port `8081`. 
+## 🔍 The Root Problem
+By default, Claude Code sends highly complex, Anthropic-specific tool-calling payloads. When these requests are routed to a different provider like Google's Gemini (e.g., `gemini-3.1-pro-high`), the raw model rejects them with an `INVALID_ARGUMENT` error because the schemas do not match what Gemini expects.
 
-The included scripts solve this by cleanly starting the proxy in the background and enforcing a `Start-Sleep` wait state before passing the tool-calling schemas to the model.
+To solve this, requests **must** be routed to the translation alias `gemini-pro-agent`. This special endpoint inside CliGate automatically intercepts Anthropic's agent payloads, translates them into Gemini-compatible schemas, and routes them to the high-tier model seamlessly.
 
 ## 📋 Requirements
 - **OS:** Windows (PowerShell recommended)
