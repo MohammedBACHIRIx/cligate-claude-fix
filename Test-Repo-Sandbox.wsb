@@ -2,7 +2,7 @@
   <MappedFolders>
     <MappedFolder>
       <!-- The path to your local repository on the host -->
-      <HostFolder>C:\Users\Lenovo\github\cligate-claude-fix</HostFolder>
+      <HostFolder>C:\Path\To\Your\cligate-claude-fix</HostFolder>
       <!-- Where it will appear inside the Sandbox -->
       <SandboxFolder>C:\Users\WDAGUtilityAccount\Desktop\cligate-claude-fix</SandboxFolder>
       <!-- Set to true so the Sandbox can't accidentally delete your real files -->

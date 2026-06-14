@@ -56,5 +56,5 @@ To automate the entire workflow and prevent these issues from recurring after a 
 
 **Usage:**
 ```powershell
-. C:\Users\Lenovo\.gemini\antigravity-cli\brain\42609fac-cf8b-4e01-a6d8-50616da2d012\claude-launcher.ps1
+.\claude-launcher.ps1
 ```
