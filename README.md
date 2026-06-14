@@ -2,11 +2,17 @@
 
 This repository contains scripts and documentation to stabilize and run **Claude Code** powered by **Gemini 3.1 Pro** via the **CliGate** local proxy on Windows.
 
+## 🏎️ The Race Condition Problem
+When automating this setup, a common **race condition** occurs: if you start the `cligate` proxy and immediately launch `claude`, Claude Code will fail to connect because the proxy needs a few seconds to fully bind to port `8081`. 
+
+The included scripts solve this by cleanly starting the proxy in the background and enforcing a `Start-Sleep` wait state before passing the tool-calling schemas to the model.
+
 ## 📋 Requirements
 - **OS:** Windows (PowerShell recommended)
 - **Node.js:** v24 or higher
 - **CliGate:** v1.3.1+ (install via `npm install -g cligate`)
 - **Claude Code:** (install via `npm install -g @anthropic-ai/claude-code`)
+- **CliGate Account Login:** You MUST be logged in. Run `cligate login` in your terminal before using.
 
 ## 🔗 Important Links
 - [CliGate GitHub Repository](https://github.com/codeking-ai/cligate)
