@@ -2,48 +2,104 @@ param(
     [string]$Model = "gemini-pro-agent"
 )
 
-Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "   CliGate & Claude Code Launcher" -ForegroundColor Cyan
-Write-Host "========================================" -ForegroundColor Cyan
-
-# 1. Check Node.js Version
-$nodeVersion = node -v
-if (-not $?) {
-    Write-Host "Node.js is not installed. Please install Node.js v24 or higher." -ForegroundColor Red
-    exit 1
+# TUI Helper Functions
+function Write-Header {
+    param([string]$Title)
+    Clear-Host
+    $w = 50
+    $pad = [Math]::Max(0, [Math]::Floor(($w - 2 - $Title.Length) / 2))
+    $padR = [Math]::Max(0, $w - 2 - $Title.Length - $pad)
+    Write-Host "+$('-'*($w-2))+" -ForegroundColor Cyan
+    Write-Host "|$(' '*$pad)$Title$(' '*$padR)|" -ForegroundColor White -BackgroundColor DarkCyan
+    Write-Host "+$('-'*($w-2))+" -ForegroundColor Cyan
+    Write-Host ""
 }
 
-$majorVersion = [int]($nodeVersion -replace '^v', '' -replace '\..*$', '')
-if ($majorVersion -lt 24) {
-    Write-Host "Warning: Your Node.js version ($nodeVersion) is below v24. CliGate recommends v24+." -ForegroundColor Yellow
-} else {
-    Write-Host "[OK] Node.js version $nodeVersion is compatible." -ForegroundColor Green
+function Write-Step {
+    param([string]$Status, [string]$Message)
+    switch ($Status) {
+        "OK"   { Write-Host "[  OK  ] " -NoNewline -ForegroundColor Green }
+        "WARN" { Write-Host "[ WARN ] " -NoNewline -ForegroundColor Yellow }
+        "FAIL" { Write-Host "[ FAIL ] " -NoNewline -ForegroundColor Red }
+        "INFO" { Write-Host "[ INFO ] " -NoNewline -ForegroundColor Cyan }
+    }
+    Write-Host $Message -ForegroundColor White
+}
+
+function Check-Port {
+    param([int]$Port)
+    $listeners = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().GetActiveTcpListeners()
+    return [bool]($listeners | Where-Object { $_.Port -eq $Port })
+}
+
+# ====================================================================
+
+Write-Header "CliGate & Claude Code Launcher"
+
+# 1. Check Node.js Version
+try {
+    $nodeVersion = node -v 2>&1
+    if ($LASTEXITCODE -eq 0 -or $nodeVersion -match "^v\d+") {
+        $nodeVersionStr = [string]$nodeVersion -replace '(?s)\r?\n.*',''
+        $majorVersion = [int]($nodeVersionStr -replace '^v', '' -replace '\..*$', '')
+        if ($majorVersion -lt 24) {
+            Write-Step "WARN" "Node.js $nodeVersionStr (v24+ recommended)"
+        } else {
+            Write-Step "OK" "Node.js $nodeVersionStr identified"
+        }
+    } else {
+        throw "Node not found"
+    }
+} catch {
+    Write-Step "FAIL" "Node.js not installed. Please install Node.js v24+"
+    exit 1
 }
 
 # 2. Check if CliGate is installed
 if (-not (Get-Command cligate -ErrorAction SilentlyContinue)) {
-    Write-Host "Installing cligate globally..." -ForegroundColor Yellow
-    npm install -g cligate
+    Write-Step "INFO" "Installing cligate globally (this may take a moment)..."
+    npm install -g cligate > $null 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        Write-Step "OK" "CliGate installed successfully."
+    } else {
+        Write-Step "FAIL" "npm install cligate failed."
+        exit 1
+    }
 } else {
-    Write-Host "[OK] CliGate is installed." -ForegroundColor Green
+    Write-Step "OK" "CliGate package is installed."
 }
 
-# 3. Check if CliGate is already running on port 8081
-$portInUse = netstat -ano | Select-String ":8081" | Select-String "LISTENING"
-if ($portInUse) {
-    Write-Host "[OK] CliGate is already running on port 8081." -ForegroundColor Green
+# 3. Check and Start CliGate on port 8081
+if (Check-Port 8081) {
+    Write-Step "OK" "CliGate server is ready on port 8081."
 } else {
-    Write-Host "Starting CliGate in the background..." -ForegroundColor Yellow
+    Write-Step "INFO" "Starting CliGate in the background..."
     Start-Process -WindowStyle Hidden -FilePath "cmd.exe" -ArgumentList "/c cligate start"
     
-    # Wait for the server to start
-    Start-Sleep -Seconds 3
+    # Wait for the server to start (Polling up to 5 seconds)
+    $timeout = 50 
+    $started = $false
+    $spinners = @("-", "\", "|", "/")
+    $i = 0
+    while ($timeout -gt 0) {
+        if (Check-Port 8081) {
+            $started = $true
+            # Clear spinner
+            Write-Host "`r$([string]::new(' ', 50))`r" -NoNewline
+            break
+        }
+        $s = $spinners[$i % 4]
+        Write-Host "`r[  $s   ] Waiting for server to bind port 8081..." -NoNewline -ForegroundColor Yellow
+        $i++
+        Start-Sleep -Milliseconds 100
+        $timeout--
+    }
     
-    $checkPort = netstat -ano | Select-String ":8081" | Select-String "LISTENING"
-    if ($checkPort) {
-        Write-Host "[OK] CliGate started successfully." -ForegroundColor Green
+    if ($started) {
+        Write-Step "OK" "CliGate server started successfully."
     } else {
-        Write-Host "Failed to start CliGate! Check if another process is blocking it." -ForegroundColor Red
+        Write-Host "`r$([string]::new(' ', 50))`r" -NoNewline
+        Write-Step "FAIL" "Failed to start CliGate! Check if another process is blocking it."
         exit 1
     }
 }
@@ -51,9 +107,10 @@ if ($portInUse) {
 # 4. Set Environment Variables for Claude Code
 $env:ANTHROPIC_BASE_URL = "http://localhost:8081"
 $env:ANTHROPIC_API_KEY = "cligate"
-Write-Host "[OK] Environment variables configured for local proxy." -ForegroundColor Green
+Write-Step "OK" "Environment variables configured (proxy active)."
 
 # 5. Launch Claude Code
-Write-Host "Launching Claude Code with model: $Model" -ForegroundColor Cyan
-Write-Host "========================================" -ForegroundColor Cyan
-claude --model $Model
+Write-Host ""
+Write-Header "Launching Claude Code ($Model)"
+
+claude --model $Model --dangerously-skip-permissions

@@ -11,53 +11,97 @@
     5. Start the CliGate proxy server.
 #>
 
-Write-Host "======================================================" -ForegroundColor Cyan
-Write-Host "  Claude Code + CliGate Automated Setup Environment" -ForegroundColor Cyan
-Write-Host "======================================================" -ForegroundColor Cyan
-Write-Host ""
+# TUI Helper Functions
+function Write-Header {
+    param([string]$Title)
+    Clear-Host
+    $w = 60
+    $pad = [Math]::Max(0, [Math]::Floor(($w - 2 - $Title.Length) / 2))
+    $padR = [Math]::Max(0, $w - 2 - $Title.Length - $pad)
+    Write-Host "+$('-'*($w-2))+" -ForegroundColor Cyan
+    Write-Host "|$(' '*$pad)$Title$(' '*$padR)|" -ForegroundColor White -BackgroundColor DarkCyan
+    Write-Host "+$('-'*($w-2))+" -ForegroundColor Cyan
+    Write-Host ""
+}
+
+function Write-Step {
+    param([string]$Status, [string]$Message)
+    switch ($Status) {
+        "OK"   { Write-Host "[  OK  ] " -NoNewline -ForegroundColor Green }
+        "WARN" { Write-Host "[ WARN ] " -NoNewline -ForegroundColor Yellow }
+        "FAIL" { Write-Host "[ FAIL ] " -NoNewline -ForegroundColor Red }
+        "INFO" { Write-Host "[ INFO ] " -NoNewline -ForegroundColor Cyan }
+    }
+    Write-Host $Message -ForegroundColor White
+}
+
+function Check-Port {
+    param([int]$Port)
+    $listeners = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().GetActiveTcpListeners()
+    return [bool]($listeners | Where-Object { $_.Port -eq $Port })
+}
+
+# ====================================================================
+
+Write-Header "Claude Code + CliGate Setup Environment"
 
 # 1. Install/Verify Node.js
-Write-Host "[1/5] Checking Node.js Installation..." -ForegroundColor Yellow
+Write-Host "`n-- [1/5] Checking Node.js Installation --" -ForegroundColor Cyan
 $nodeInstalled = Get-Command node -ErrorAction SilentlyContinue
 if (-not $nodeInstalled) {
-    Write-Host "Node.js not found. Installing via winget..." -ForegroundColor Magenta
+    Write-Step "INFO" "Node.js not found. Installing via winget..."
     winget install OpenJS.NodeJS.LTS -e --accept-source-agreements --accept-package-agreements
     
     Write-Host ""
-    Write-Host "=========================================================" -ForegroundColor Red
-    Write-Host " Node.js was just installed. You MUST restart PowerShell " -ForegroundColor Red
-    Write-Host " to update your PATH before running this script again.   " -ForegroundColor Red
-    Write-Host "=========================================================" -ForegroundColor Red
+    Write-Host "+---------------------------------------------------------+" -ForegroundColor Red
+    Write-Host "| Node.js was just installed. You MUST restart PowerShell |" -ForegroundColor Red
+    Write-Host "| to update your PATH before running this script again.   |" -ForegroundColor Red
+    Write-Host "+---------------------------------------------------------+" -ForegroundColor Red
     exit
 } else {
-    $nodeVer = node -v
-    Write-Host "[OK] Node.js is installed ($nodeVer)" -ForegroundColor Green
+    try {
+        $nodeVer = node -v 2>&1
+        $nodeVersionStr = [string]$nodeVer -replace '(?s)\r?\n.*',''
+        Write-Step "OK" "Node.js is installed ($nodeVersionStr)"
+    } catch {
+        Write-Step "WARN" "Node.js is installed but could not retrieve version."
+    }
 }
 
 # 2. Install CliGate
-Write-Host "`n[2/5] Installing CliGate proxy..." -ForegroundColor Yellow
+Write-Host "`n-- [2/5] Installing CliGate proxy --" -ForegroundColor Cyan
 if (-not (Get-Command cligate -ErrorAction SilentlyContinue)) {
-    npm install -g cligate
-    if ($?) { Write-Host "[OK] CliGate installed successfully." -ForegroundColor Green }
+    Write-Step "INFO" "Installing cligate globally via npm..."
+    npm install -g cligate > $null 2>&1
+    if ($LASTEXITCODE -eq 0) { 
+        Write-Step "OK" "CliGate installed successfully." 
+    } else {
+        Write-Step "FAIL" "Failed to install CliGate."
+    }
 } else {
-    Write-Host "[OK] CliGate is already installed." -ForegroundColor Green
+    Write-Step "OK" "CliGate is already installed."
 }
 
 # 3. Install Claude Code
-Write-Host "`n[3/5] Installing Claude Code..." -ForegroundColor Yellow
+Write-Host "`n-- [3/5] Installing Claude Code --" -ForegroundColor Cyan
 if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
-    npm install -g @anthropic-ai/claude-code
-    if ($?) { Write-Host "[OK] Claude Code installed successfully." -ForegroundColor Green }
+    Write-Step "INFO" "Installing @anthropic-ai/claude-code globally..."
+    npm install -g @anthropic-ai/claude-code > $null 2>&1
+    if ($LASTEXITCODE -eq 0) { 
+        Write-Step "OK" "Claude Code installed successfully." 
+    } else {
+        Write-Step "FAIL" "Failed to install Claude Code."
+    }
 } else {
-    Write-Host "[OK] Claude Code is already installed." -ForegroundColor Green
+    Write-Step "OK" "Claude Code is already installed."
 }
 
 # 4. Configure PowerShell Profile permanently
-Write-Host "`n[4/5] Configuring PowerShell Profile for Persistent Routing..." -ForegroundColor Yellow
+Write-Host "`n-- [4/5] Configuring PowerShell Profile for Persistent Routing --" -ForegroundColor Cyan
 $profilePath = $PROFILE
 if (-not (Test-Path -Path $profilePath)) {
     New-Item -Path $profilePath -ItemType File -Force | Out-Null
-    Write-Host "Created new PowerShell profile at: $profilePath" -ForegroundColor DarkGray
+    Write-Step "INFO" "Created new PowerShell profile at: $profilePath"
 }
 
 $profileContent = Get-Content $profilePath -Raw -ErrorAction SilentlyContinue
@@ -71,35 +115,55 @@ $exportLines = @"
 
 if ($profileContent -notmatch "ANTHROPIC_BASE_URL") {
     Add-Content -Path $profilePath -Value $exportLines
-    Write-Host "[OK] Added ANTHROPIC_BASE_URL and ANTHROPIC_API_KEY to your `$PROFILE" -ForegroundColor Green
+    Write-Step "OK" "Added ANTHROPIC_BASE_URL & ANTHROPIC_API_KEY to`n         your profile ($profilePath)"
     
     # Apply to current session immediately
     $env:ANTHROPIC_BASE_URL = "http://localhost:8081"
     $env:ANTHROPIC_API_KEY = "cligate"
 } else {
-    Write-Host "[OK] Routing variables already exist in `$PROFILE" -ForegroundColor Green
+    Write-Step "OK" "Routing variables already exist in profile."
 }
 
 # 5. Start CliGate
-Write-Host "`n[5/5] Checking CliGate Server..." -ForegroundColor Yellow
-$portInUse = netstat -ano | Select-String ":8081" | Select-String "LISTENING"
-if (-not $portInUse) {
-    Write-Host "Starting CliGate in the background..." -ForegroundColor Magenta
+Write-Host "`n-- [5/5] Checking CliGate Server --" -ForegroundColor Cyan
+if (-not (Check-Port 8081)) {
+    Write-Step "INFO" "Starting CliGate in the background..."
     Start-Process -WindowStyle Hidden -FilePath "cmd.exe" -ArgumentList "/c cligate start"
-    Start-Sleep -Seconds 3
-    Write-Host "[OK] CliGate server started." -ForegroundColor Green
+    
+    # Fast polling with spinner
+    $timeout = 50
+    $started = $false
+    $spinners = @("-", "\", "|", "/")
+    $i = 0
+    while ($timeout -gt 0) {
+        if (Check-Port 8081) {
+            $started = $true
+            Write-Host "`r$([string]::new(' ', 60))`r" -NoNewline
+            break
+        }
+        $s = $spinners[$i % 4]
+        Write-Host "`r[  $s   ] Waiting for server on port 8081..." -NoNewline -ForegroundColor Yellow
+        $i++
+        Start-Sleep -Milliseconds 100
+        $timeout--
+    }
+    
+    if ($started) {
+        Write-Step "OK" "CliGate server started and ready."
+    } else {
+        Write-Host "`r$([string]::new(' ', 60))`r" -NoNewline
+        Write-Step "FAIL" "CliGate server did not bind port 8081 in time."
+    }
 } else {
-    Write-Host "[OK] CliGate server is already running." -ForegroundColor Green
+    Write-Step "OK" "CliGate server is already running."
 }
 
 # Final Instructions
-Write-Host "`n======================================================" -ForegroundColor Cyan
-Write-Host "  SETUP COMPLETE! [YAY]" -ForegroundColor Green
-Write-Host "======================================================" -ForegroundColor Cyan
-Write-Host ""
+Write-Host "`n"
+Write-Header "SETUP COMPLETE!"
 Write-Host "IMPORTANT NEXT STEPS:" -ForegroundColor Yellow
 Write-Host "1. If this is your first time using CliGate, you must authenticate:"
-Write-Host "   Run: " -NoNewline; Write-Host "cligate login" -ForegroundColor Cyan
+Write-Host "   Run: " -NoNewline; Write-Host "cligate accounts add" -ForegroundColor Cyan
 Write-Host "2. Once logged in, you can launch Claude Code with the Gemini model:"
 Write-Host "   Run: " -NoNewline; Write-Host "claude --model gemini-pro-agent" -ForegroundColor Cyan
 Write-Host ""
