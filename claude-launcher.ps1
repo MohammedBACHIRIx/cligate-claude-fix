@@ -185,6 +185,13 @@ $env:ANTHROPIC_BASE_URL = "http://localhost:8081"
 $env:ANTHROPIC_API_KEY = "cligate"
 Write-Step "OK" "Environment variables configured (proxy active)."
 
+# 4.5 Capture Initial Usage
+$InitialUsage = $null
+try {
+    $UsageResp = Invoke-RestMethod -Uri "http://localhost:8081/api/usage/overview" -ErrorAction SilentlyContinue
+    if ($UsageResp.today) { $InitialUsage = $UsageResp }
+} catch {}
+
 # 5. Launch Claude Code
 Write-Host ""
 Write-Header "Launching Claude Code ($Model)"
@@ -192,9 +199,30 @@ Write-Header "Launching Claude Code ($Model)"
 # Launch Claude Code. This will block execution until Claude exits.
 claude --model $Model --dangerously-skip-permissions
 
-# 6. Post-Flight: Graceful Multiple Session Shutdown Logic
+# 6. Post-Flight: Quota Usage Report & Graceful Shutdown
 Write-Host ""
-Write-Step "INFO" "Claude session ended. Checking for other active sessions..."
+Write-Header "Session Summary"
+
+try {
+    $FinalUsage = Invoke-RestMethod -Uri "http://localhost:8081/api/usage/overview" -ErrorAction SilentlyContinue
+    if ($InitialUsage -and $FinalUsage.today) {
+        $reqDiff = $FinalUsage.today.requests - $InitialUsage.today.requests
+        $inDiff = $FinalUsage.today.inputTokens - $InitialUsage.today.inputTokens
+        $outDiff = $FinalUsage.today.outputTokens - $InitialUsage.today.outputTokens
+
+        Write-Host "  Requests:      " -NoNewline
+        Write-Host $reqDiff -ForegroundColor Cyan
+        Write-Host "  Input Tokens:  " -NoNewline
+        Write-Host ("{0:N0}" -f $inDiff) -ForegroundColor Cyan
+        Write-Host "  Output Tokens: " -NoNewline
+        Write-Host ("{0:N0}" -f $outDiff) -ForegroundColor Cyan
+        Write-Host ""
+    }
+} catch {
+    Write-Step "WARN" "Could not retrieve quota status from CliGate API."
+}
+
+Write-Step "INFO" "Checking for other active sessions..."
 
 # Short grace period for processes to exit
 Start-Sleep -Milliseconds 500
