@@ -12,7 +12,7 @@ To solve this, requests **must** be routed to the translation alias `gemini-pro-
 - **Node.js:** v24 or higher
 - **CliGate:** v1.3.1+ (install via `npm install -g cligate`)
 - **Claude Code:** (install via `npm install -g @anthropic-ai/claude-code`)
-- **CliGate Account Login:** You MUST be logged in. Run `cligate login` in your terminal before using.
+- **CliGate Account Login:** You MUST be logged in. Run `cligate accounts add` in your terminal before using.
 
 ## 🔗 Important Links
 - [CliGate GitHub Repository](https://github.com/codeking-ai/cligate)

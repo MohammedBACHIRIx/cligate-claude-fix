@@ -113,4 +113,39 @@ Write-Step "OK" "Environment variables configured (proxy active)."
 Write-Host ""
 Write-Header "Launching Claude Code ($Model)"
 
+# Launch Claude Code. This will block execution until Claude exits.
 claude --model $Model --dangerously-skip-permissions
+
+# 6. Post-Flight: Graceful Multiple Session Shutdown Logic
+Write-Host ""
+Write-Step "INFO" "Claude session ended. Checking for other active sessions..."
+
+# Short grace period for processes to exit
+Start-Sleep -Milliseconds 500
+
+$otherSessions = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { 
+    ($null -ne $_.CommandLine) -and
+    ($_.CommandLine -match "claude(\.exe|\.cmd|\.js|\s|$)") -and 
+    ($_.Name -match "(node\.exe|claude\.exe)") -and 
+    ($_.ProcessId -ne $PID)
+})
+
+if ($otherSessions.Count -eq 0) {
+    Write-Step "INFO" "No other Claude sessions found. Shutting down CliGate server..."
+    
+    # Find the exact process bounded to Port 8081 to safely kill only the CliGate server
+    $netstat = netstat -ano | Select-String ":8081" | Select-String "LISTENING"
+    if ($netstat) {
+        $line = ($netstat -split '\r?\n')[0]
+        $cligatePID = ($line -split '\s+')[-1]
+        
+        if ($cligatePID -match "^\d+$" -and $cligatePID -ne "0") {
+            Stop-Process -Id $cligatePID -Force -ErrorAction SilentlyContinue
+            Write-Step "OK" "CliGate server (PID $cligatePID) shutdown successfully."
+        }
+    } else {
+        Write-Step "WARN" "CliGate server was already stopped."
+    }
+} else {
+    Write-Step "INFO" "$($otherSessions.Count) other Claude session(s) active. Leaving CliGate running."
+}
