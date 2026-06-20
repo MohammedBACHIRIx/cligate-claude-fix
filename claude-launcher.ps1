@@ -32,9 +32,85 @@ function Check-Port {
     return [bool]($listeners | Where-Object { $_.Port -eq $Port })
 }
 
+function Select-TUIModel {
+    param([string]$DefaultModel)
+
+    $models = @(
+        "gemini-pro-agent",
+        "gemini-1.5-pro",
+        "gemini-1.5-flash",
+        "claude-3-5-sonnet",
+        "claude-3-opus",
+        "claude-3-haiku",
+        "gpt-4o"
+    )
+
+    $selectedIndex = [array]::IndexOf($models, $DefaultModel)
+    if ($selectedIndex -lt 0) { $selectedIndex = 0 }
+
+    try {
+        # Check if console is interactive and supports cursor positioning
+        $top = [Console]::CursorTop
+        [console]::CursorVisible = $false
+
+        Write-Host "Select AI Model for Claude Code" -ForegroundColor Cyan
+        Write-Host "Use Up/Down arrows to select, Enter to confirm:`n" -ForegroundColor DarkGray
+
+        $menuTop = [Console]::CursorTop
+
+        while ($true) {
+            [Console]::SetCursorPosition(0, $menuTop)
+            for ($i=0; $i -lt $models.Length; $i++) {
+                $pad = " " * (30 - $models[$i].Length)
+                if ($i -eq $selectedIndex) {
+                    Write-Host "  > $($models[$i])$pad" -ForegroundColor Black -BackgroundColor Cyan
+                } else {
+                    Write-Host "    $($models[$i])$pad" -ForegroundColor White -BackgroundColor Black
+                }
+            }
+
+            $keyInfo = [System.Console]::ReadKey($true)
+            if ($keyInfo.Key -eq 'UpArrow') {
+                $selectedIndex--
+                if ($selectedIndex -lt 0) { $selectedIndex = $models.Length - 1 }
+            } elseif ($keyInfo.Key -eq 'DownArrow') {
+                $selectedIndex++
+                if ($selectedIndex -ge $models.Length) { $selectedIndex = 0 }
+            } elseif ($keyInfo.Key -eq 'Enter') {
+                break
+            }
+        }
+        [console]::CursorVisible = $true
+        Write-Host ""
+        return $models[$selectedIndex]
+    } catch {
+        # Fallback for non-interactive / redirected consoles
+        Write-Host "`nSelect AI Model (Type number or press Enter for default):" -ForegroundColor Cyan
+        for ($i=0; $i -lt $models.Length; $i++) {
+            $prefix = if ($i -eq $selectedIndex) { "* " } else { "  " }
+            Write-Host "$prefix [$($i + 1)] $($models[$i])" -ForegroundColor White
+        }
+        # Clear error action so Read-Host can work naturally
+        $ErrorActionPreference = "Continue"
+        $choice = Read-Host "Choice (Default: $($models[$selectedIndex]))"
+        if ([string]::IsNullOrWhiteSpace($choice)) { return $models[$selectedIndex] }
+        if ($choice -match "^\d+$") {
+            $idx = [int]$choice - 1
+            if ($idx -ge 0 -and $idx -lt $models.Length) { return $models[$idx] }
+        }
+        return $choice
+    }
+}
+
 # ====================================================================
 
 Write-Header "CliGate & Claude Code Launcher"
+
+# 0. Interactive Model Selection (Skip if passed as argument)
+if (-not $PSBoundParameters.ContainsKey('Model')) {
+    $Model = Select-TUIModel -DefaultModel $Model
+    Write-Host ""
+}
 
 # 1. Check Node.js Version
 try {
@@ -75,9 +151,9 @@ if (Check-Port 8081) {
 } else {
     Write-Step "INFO" "Starting CliGate in the background..."
     Start-Process -WindowStyle Hidden -FilePath "cmd.exe" -ArgumentList "/c cligate start"
-    
+
     # Wait for the server to start (Polling up to 5 seconds)
-    $timeout = 50 
+    $timeout = 50
     $started = $false
     $spinners = @("-", "\", "|", "/")
     $i = 0
@@ -94,7 +170,7 @@ if (Check-Port 8081) {
         Start-Sleep -Milliseconds 100
         $timeout--
     }
-    
+
     if ($started) {
         Write-Step "OK" "CliGate server started successfully."
     } else {
@@ -123,22 +199,22 @@ Write-Step "INFO" "Claude session ended. Checking for other active sessions..."
 # Short grace period for processes to exit
 Start-Sleep -Milliseconds 500
 
-$otherSessions = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { 
+$otherSessions = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
     ($null -ne $_.CommandLine) -and
-    ($_.CommandLine -match "claude(\.exe|\.cmd|\.js|\s|$)") -and 
-    ($_.Name -match "(node\.exe|claude\.exe)") -and 
+    ($_.CommandLine -match "claude(\.exe|\.cmd|\.js|\s|$)") -and
+    ($_.Name -match "(node\.exe|claude\.exe)") -and
     ($_.ProcessId -ne $PID)
 })
 
 if ($otherSessions.Count -eq 0) {
     Write-Step "INFO" "No other Claude sessions found. Shutting down CliGate server..."
-    
+
     # Find the exact process bounded to Port 8081 to safely kill only the CliGate server
     $netstat = netstat -ano | Select-String ":8081" | Select-String "LISTENING"
     if ($netstat) {
         $line = ($netstat -split '\r?\n')[0]
         $cligatePID = ($line -split '\s+')[-1]
-        
+
         if ($cligatePID -match "^\d+$" -and $cligatePID -ne "0") {
             Stop-Process -Id $cligatePID -Force -ErrorAction SilentlyContinue
             Write-Step "OK" "CliGate server (PID $cligatePID) shutdown successfully."
