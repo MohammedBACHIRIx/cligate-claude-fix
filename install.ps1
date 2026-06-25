@@ -70,16 +70,37 @@ if (-not $nodeInstalled) {
 
 # 2. Install CliGate
 Write-Host "`n-- [2/5] Installing CliGate proxy --" -ForegroundColor Cyan
+$cligateInstalled = $false
 if (-not (Get-Command cligate -ErrorAction SilentlyContinue)) {
     Write-Step "INFO" "Installing cligate globally via npm..."
     npm install -g cligate > $null 2>&1
     if ($LASTEXITCODE -eq 0) { 
         Write-Step "OK" "CliGate installed successfully." 
+        $cligateInstalled = $true
     } else {
         Write-Step "FAIL" "Failed to install CliGate."
     }
 } else {
     Write-Step "OK" "CliGate is already installed."
+    $cligateInstalled = $true
+}
+
+if ($cligateInstalled) {
+    try {
+        $npmRoot = (npm root -g).Trim()
+        $targetFile = Join-Path $npmRoot "cligate\src\routes\chat-route.js"
+        $patchFile = Join-Path $PSScriptRoot "patches\chat-route.js"
+        
+        if (Test-Path $targetFile) {
+            Write-Step "INFO" "Applying Antigravity chat routing patch to: $targetFile"
+            Copy-Item -Path $patchFile -Destination $targetFile -Force
+            Write-Step "OK" "Patch applied successfully."
+        } else {
+            Write-Step "WARN" "Could not find cligate chat-route.js to patch at: $targetFile"
+        }
+    } catch {
+        Write-Step "WARN" "Failed to apply completions patch: $_"
+    }
 }
 
 # 3. Install Claude Code
@@ -150,12 +171,43 @@ if (-not (Check-Port 8081)) {
     
     if ($started) {
         Write-Step "OK" "CliGate server started and ready."
+        
+        # Ensure routingMode is set to app-assigned in cligate settings
+        $settingsPath = Join-Path [System.Environment]::GetFolderPath('UserProfile') ".cligate\settings.json"
+        Start-Sleep -Seconds 1
+        if (Test-Path $settingsPath) {
+            try {
+                $settingsContent = Get-Content $settingsPath -Raw
+                if ($settingsContent -match '"routingMode":\s*"automatic"') {
+                    $settingsContent = $settingsContent -replace '"routingMode":\s*"automatic"', '"routingMode": "app-assigned"'
+                    Set-Content -Path $settingsPath -Value $settingsContent
+                    Write-Step "OK" "Configured settings.json to use app-assigned routing."
+                }
+            } catch {
+                Write-Step "WARN" "Failed to update settings.json: $_"
+            }
+        }
     } else {
         Write-Host "`r$([string]::new(' ', 60))`r" -NoNewline
         Write-Step "FAIL" "CliGate server did not bind port 8081 in time."
     }
 } else {
     Write-Step "OK" "CliGate server is already running."
+    
+    # Ensure routingMode is set to app-assigned in cligate settings
+    $settingsPath = Join-Path [System.Environment]::GetFolderPath('UserProfile') ".cligate\settings.json"
+    if (Test-Path $settingsPath) {
+        try {
+            $settingsContent = Get-Content $settingsPath -Raw
+            if ($settingsContent -match '"routingMode":\s*"automatic"') {
+                $settingsContent = $settingsContent -replace '"routingMode":\s*"automatic"', '"routingMode": "app-assigned"'
+                Set-Content -Path $settingsPath -Value $settingsContent
+                Write-Step "OK" "Configured settings.json to use app-assigned routing."
+            }
+        } catch {
+            Write-Step "WARN" "Failed to update settings.json: $_"
+        }
+    }
 }
 
 # Final Instructions
